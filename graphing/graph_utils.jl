@@ -1,12 +1,13 @@
-using CGP
+using CartesianGeneticProgramming
 using LightGraphs
 using MetaGraphs
 using TikzGraphs
 using TikzPictures
 using LaTeXStrings
-using Base.Test
+using Test
+using Printf
 
-function to_graph(c::Chromosome; active_outputs=trues(c.nout))
+function to_graph(c::Array{Float64}; active_outputs=trues(c.nout))
     actives = [n.active for n in c.nodes]
     actives[1:c.nin] = true
     vids = find(actives)
@@ -56,7 +57,7 @@ function to_graph(c::Chromosome; active_outputs=trues(c.nout))
     mg
 end
 
-function chromo_draw(c::Chromosome, file::String="graph.pdf"; active_outputs=trues(c.nout))
+function chromo_draw(c::Array{Float64}, file::String="graph.pdf"; active_outputs=trues(c.nout))
     mg = to_graph(c, active_outputs=active_outputs)
     names = map(x->get_prop(mg, x, :name), 1:nv(mg))
     t = TikzGraphs.plot(mg.graph, names)
@@ -173,4 +174,34 @@ function set_outputs!(mg::MetaDiGraph, nin::Int, nout::Int, nnodes::Int,
         set_prop!(mg, inp, out, :ci, 0)
     end
     mg
+end
+
+function walk_nodes(ind::CGPInd)
+    dot_strs = []
+    push!(dot_strs, "digraph cgpgraph {\n")
+    function visit(node_num, current_nd) 
+        if current_nd.active
+            fname = String(Symbol(current_nd.f))
+            visit(current_nd.x, ind.nodes[current_nd.x])
+            if(CGPFunctions.arity[fname] > 1)
+               visit(current_nd.y, ind.nodes[current_nd.y])
+               
+            end
+            @show (node_num, current_nd)
+            
+            xdotline = "N$(current_nd.x)-> N$node_num ;"
+            push!(dot_strs, "N$node_num [label=\"$fname:$node_num\"];")
+            push!(dot_strs, xdotline)
+            if(CGPFunctions.arity[fname] > 1)
+               ydotline = "N$(current_nd.y)-> N$node_num ;"
+               push!(dot_strs, ydotline)
+            end
+        end
+    end
+    for current_node_num in ind.outputs 
+        current_node     = ind.nodes[current_node_num]
+        visit(current_node_num, current_node)
+    end
+    push!(dot_strs, "}")
+    dot_strs
 end

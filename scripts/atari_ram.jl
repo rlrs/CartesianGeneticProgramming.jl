@@ -2,6 +2,7 @@ using CartesianGeneticProgramming
 using Cambrian
 using ArcadeLearningEnvironment
 using ArgParse
+using GR
 import Cambrian.mutate
 import Random
 
@@ -21,7 +22,7 @@ s = ArgParseSettings()
     default = "cfg/atari_ram.yaml"
     "--game"
     help = "game rom name"
-    default = "centipede"
+    default = "pong"
     "--seed"
     help = "random seed for evolution"
     arg_type = Int
@@ -33,13 +34,26 @@ s = ArgParseSettings()
 end
 args = parse_args(ARGS, s)
 
+function imshowcolor(x::AbstractArray{UInt8,1}, dims)
+    clearws()
+    setviewport(0, dims[1] / dims[2], 0, 1)
+    setwindow(0, 1, 0, 1)
+    y = (zeros(UInt32, dims...) .+ 0xff) .<< 24
+    img = UInt32.(x)
+    @simd for i in 1:length(y)
+        @inbounds y[i] += img[3*(i-1)+1] + img[3*(i-1)+2] << 8 + img[3*i] << 16
+    end
+    drawimage(0, 1, 0, 1, dims..., y)
+    updatews()
+end
+
 function play_atari(ind::CGPInd, rom_name::String; seed=0, max_frames=18000, render=false)
     ale = ALE_new()
     setInt(ale, "random_seed", Cint(seed))
-    if render
-        setBool(ale, "display_screen", true)
-        setBool(ale, "sound", true)
-    end
+    #if render
+    #    setBool(ale, "display_screen", true)
+    #    setBool(ale, "sound", true)
+    #end
     loadROM(ale, rom_name)
     actions = getMinimalActionSet(ale)
     reward = 0.0
@@ -52,6 +66,10 @@ function play_atari(ind::CGPInd, rom_name::String; seed=0, max_frames=18000, ren
         frames += 1
         if frames > max_frames
             break
+        end
+        if render
+            x = getScreenRGB(ale)
+            imshowcolor(x, (Int(getScreenWidth(ale)), Int(getScreenHeight(ale))))
         end
     end
     ALE_del(ale)
